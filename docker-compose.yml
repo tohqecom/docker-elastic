@@ -1,0 +1,77 @@
+version: '3.1'
+services:
+    aws_sue:
+        container_name: aws_sue
+        image: sue:php
+        build:
+            context: ./php
+        ports:
+            - "8080:80"
+            - "1443:443"
+        volumes:
+            - ./source:/var/www/html
+            - ./log/httpd:/var/log/httpd
+        extra_hosts:
+            - "sue.local:127.0.0.1"
+        privileged: true
+    aruora_sue:
+        container_name: aruora_sue
+        image: atsnngs/mysql-aurora-compatible
+        ports:
+            - "13307:3306"
+        volumes:
+            - ./log/mysql:/var/log
+        privileged: true
+    elasticsearch:
+        build:
+            context: elasticsearch/
+            args:
+                ELK_VERSION: $ELK_VERSION
+        volumes:
+            - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+            - ./elasticsearch:/usr/share/elasticsearch/data
+        ports:
+            - "9200:9200"
+            - "9300:9300"
+        environment:
+            ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+            ELASTIC_PASSWORD: changeme
+            # Use single node discovery in order to disable production mode and avoid bootstrap checks.
+            # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+            discovery.type: single-node
+
+    logstash:
+        build:
+            context: logstash/
+            args:
+                ELK_VERSION: $ELK_VERSION
+        volumes:
+            - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+            - ./logstash/pipeline:/usr/share/logstash/pipeline
+        ports:
+            - "5044:5044"
+            - "5000:5000/tcp"
+            - "5000:5000/udp"
+            - "9600:9600"
+        environment:
+            LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+        depends_on:
+            - elasticsearch
+
+    kibana:
+        build:
+            context: kibana/
+            args:
+                ELK_VERSION: $ELK_VERSION
+        volumes:
+            - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml
+        ports:
+            - "5601:5601"
+        depends_on:
+            - elasticsearch
+
+    redis:
+        image: "redis:alpine"
+        ports:
+            - 6379:6379
+    
